@@ -1,527 +1,254 @@
+"use strict";
+
+/* =========================================
+   CONFIG
+========================================= */
+
 const API_URL = "/api/matches";
+
+
+/* =========================================
+   DOM
+========================================= */
 
 const matchesGrid = document.getElementById("matchesGrid");
 const loader = document.getElementById("loader");
 const errorBox = document.getElementById("errorBox");
-const emptyBox = document.getElementById("emptyBox");
-const statusText = document.getElementById("status");
+
 const refreshBtn = document.getElementById("refreshBtn");
 
+const liveCount = document.getElementById("liveCount");
+const upcomingCount = document.getElementById("upcomingCount");
 
-// ======================================================
-// LOAD MATCHES
-// ======================================================
+const playerModal = document.getElementById("playerModal");
+const closePlayer = document.getElementById("closePlayer");
+
+const video = document.getElementById("video");
+const playerMessage = document.getElementById("playerMessage");
+
+
+/* =========================================
+   SHAKA PLAYER
+========================================= */
+
+let shakaPlayer = null;
+
+
+/* =========================================
+   INITIALIZE
+========================================= */
+
+document.addEventListener("DOMContentLoaded", () => {
+
+    if (refreshBtn) {
+        refreshBtn.addEventListener("click", loadMatches);
+    }
+
+    if (closePlayer) {
+        closePlayer.addEventListener("click", closeVideoPlayer);
+    }
+
+    if (playerModal) {
+        playerModal.addEventListener("click", (event) => {
+
+            if (event.target === playerModal) {
+                closeVideoPlayer();
+            }
+
+        });
+    }
+
+    loadMatches();
+});
+
+
+/* =========================================
+   LOAD API
+========================================= */
 
 async function loadMatches() {
 
-    if (loader) {
-        loader.style.display = "flex";
-    }
-
-    if (errorBox) {
-        errorBox.style.display = "none";
-        errorBox.innerHTML = "";
-    }
-
-    if (emptyBox) {
-        emptyBox.style.display = "none";
-    }
-
-    if (matchesGrid) {
-        matchesGrid.innerHTML = "";
-    }
-
-    if (statusText) {
-        statusText.textContent = "Loading matches...";
-    }
-
-    if (refreshBtn) {
-        refreshBtn.disabled = true;
-        refreshBtn.textContent = "↻ Loading...";
-    }
-
+    showLoader();
+    hideError();
 
     try {
 
         const response = await fetch(API_URL, {
             method: "GET",
-            headers: {
-                "Accept": "application/json"
-            },
             cache: "no-store"
         });
 
-
-        const contentType =
-            response.headers.get("content-type") || "";
-
-
-        let data;
-
-
-        // --------------------------------------------------
-        // JSON RESPONSE
-        // --------------------------------------------------
-
-        if (contentType.includes("application/json")) {
-
-            data = await response.json();
-
-        } else {
-
-            const text =
-                await response.text();
-
-            throw new Error(
-                `Server returned ${response.status}: ${text}`
-            );
-        }
-
-
-        console.log(
-            "MATCH API RESPONSE:",
-            data
-        );
-
-
-        // --------------------------------------------------
-        // API ERROR
-        // --------------------------------------------------
-
         if (!response.ok) {
-
-            console.error(
-                "API RESPONSE:",
-                data
-            );
-
             throw new Error(
-                data?.error ||
-                `API Error: ${response.status}`
+                `API request failed: ${response.status}`
             );
         }
 
+        const data = await response.json();
 
-        // --------------------------------------------------
-        // GET MATCHES
-        // --------------------------------------------------
+        console.log("API RESPONSE:", data);
 
-        const matches =
-            getMatchesArray(data);
+        const matches = getMatchesArray(data);
 
+        console.log("MATCHES:", matches);
 
-        console.log(
-            "MATCHES:",
-            matches
-        );
-
-
-        // --------------------------------------------------
-        // NO MATCHES
-        // --------------------------------------------------
-
-        if (!matches.length) {
-
-            if (emptyBox) {
-                emptyBox.style.display = "block";
-            }
-
-            if (statusText) {
-                statusText.textContent =
-                    "No matches found";
-            }
-
-            return;
-        }
-
-
-        // --------------------------------------------------
-        // RENDER
-        // --------------------------------------------------
+        updateStats(data, matches);
 
         renderMatches(matches);
 
+    } catch (error) {
 
-        if (statusText) {
-            statusText.textContent =
-                `${matches.length} matches found`;
-        }
+        console.error("LOAD MATCH ERROR:", error);
 
-    }
-
-
-    catch (error) {
-
-        console.error(
-            "Match API Error:",
-            error
+        showError(
+            "Unable to load matches.<br><br>" +
+            escapeHtml(error.message)
         );
 
-        showError(error);
+    } finally {
 
-        if (statusText) {
-            statusText.textContent =
-                "Unable to load matches";
-        }
+        hideLoader();
 
-    }
-
-
-    finally {
-
-        if (loader) {
-            loader.style.display = "none";
-        }
-
-        if (refreshBtn) {
-            refreshBtn.disabled = false;
-            refreshBtn.textContent = "↻ Refresh";
-        }
     }
 }
 
 
-// ======================================================
-// GET MATCH ARRAY
-// ======================================================
+/* =========================================
+   GET MATCH ARRAY
+========================================= */
 
 function getMatchesArray(data) {
 
-    // Exact structure from your API
-    if (
-        data &&
-        Array.isArray(data.Matches)
-    ) {
-
-        return data.Matches;
-    }
-
-
-    // Lowercase fallback
-    if (
-        data &&
-        Array.isArray(data.matches)
-    ) {
-
-        return data.matches;
-    }
-
-
-    // Direct array fallback
     if (Array.isArray(data)) {
-
         return data;
     }
 
+    if (Array.isArray(data?.Matches)) {
+        return data.Matches;
+    }
 
-    // Other possible API structures
-    if (
-        data &&
-        Array.isArray(data.data)
-    ) {
+    if (Array.isArray(data?.matches)) {
+        return data.matches;
+    }
 
+    if (Array.isArray(data?.data)) {
         return data.data;
     }
-
-
-    if (
-        data &&
-        data.data &&
-        Array.isArray(data.data.Matches)
-    ) {
-
-        return data.data.Matches;
-    }
-
-
-    if (
-        data &&
-        data.data &&
-        Array.isArray(data.data.matches)
-    ) {
-
-        return data.data.matches;
-    }
-
 
     return [];
 }
 
 
-// ======================================================
-// RENDER MATCHES
-// ======================================================
+/* =========================================
+   UPDATE STATS
+========================================= */
 
-function renderMatches(matches) {
+function updateStats(data, matches) {
 
-    if (!matchesGrid) {
-        return;
-    }
+    const live =
+        Number(data?.Stats?.LiveCount) ||
+        matches.filter(
+            match =>
+                String(match?.status || "").toUpperCase() === "LIVE"
+        ).length;
 
+    const upcoming =
+        Number(data?.Stats?.UpcomingCount) ||
+        matches.filter(
+            match =>
+                String(match?.status || "").toUpperCase() !== "LIVE"
+        ).length;
 
-    matchesGrid.innerHTML = "";
-
-
-    matches.forEach(
-        (match, index) => {
-
-            const card =
-                createMatchCard(
-                    match,
-                    index
-                );
-
-            matchesGrid.appendChild(card);
-        }
-    );
+    liveCount.textContent = `LIVE ${live}`;
+    upcomingCount.textContent = `UPCOMING ${upcoming}`;
 }
 
 
-// ======================================================
-// CREATE MATCH CARD
-// ======================================================
+/* =========================================
+   RENDER MATCHES
+========================================= */
 
-function createMatchCard(
-    match,
-    index
-) {
+function renderMatches(matches) {
 
-    const card =
-        document.createElement("article");
+    matchesGrid.innerHTML = "";
 
+    if (!matches.length) {
 
-    card.className =
-        "match-card";
+        matchesGrid.innerHTML = `
+            <div class="empty-box">
+                No matches available.
+            </div>
+        `;
 
+        return;
+    }
 
-    // --------------------------------------------------
-    // TITLE
-    // --------------------------------------------------
+    matches.forEach((match, index) => {
 
-    const title =
-        getValue(
-            match,
-            [
-                "title",
-                "name",
-                "match_name",
-                "match_title"
-            ],
-            "Cricket Match"
-        );
+        const card = createMatchCard(match, index);
+
+        matchesGrid.appendChild(card);
+
+    });
+}
 
 
-    // --------------------------------------------------
-    // TOURNAMENT
-    // --------------------------------------------------
+/* =========================================
+   CREATE MATCH CARD
+========================================= */
 
-    const tournament =
-        getValue(
-            match,
-            [
-                "tournament",
-                "series",
-                "league",
-                "competition"
-            ],
-            "Cricket"
-        );
+function createMatchCard(match, index) {
 
+    const card = document.createElement("article");
 
-    // --------------------------------------------------
-    // STATUS
-    // --------------------------------------------------
-
-    const status =
-        String(
-            getValue(
-                match,
-                [
-                    "status",
-                    "state"
-                ],
-                "UPCOMING"
-            )
-        )
-        .toUpperCase();
-
-
-    // --------------------------------------------------
-    // IMAGE
-    // IMPORTANT: API USES cover_image
-    // --------------------------------------------------
+    card.className = "match-card";
 
     const image =
-        getValue(
-            match,
-            [
-                "cover_image",
-                "image",
-                "thumbnail",
-                "poster",
-                "logo"
-            ],
-            ""
-        );
+        getString(match?.cover_image) ||
+        "https://via.placeholder.com/800x450?text=CricZone";
 
-
-    // --------------------------------------------------
-    // MATCH ID
-    // --------------------------------------------------
-
-    const matchId =
-        getValue(
-            match,
-            [
-                "match_id",
-                "id",
-                "matchId"
-            ],
-            index
-        );
-
-
-    // --------------------------------------------------
-    // TIME
-    // --------------------------------------------------
-
-    const matchTime =
-        getValue(
-            match,
-            [
-                "time",
-                "match_time",
-                "start_time",
-                "startTime"
-            ],
-            ""
-        );
-
-
-    // --------------------------------------------------
-    // SYNOPSIS
-    // --------------------------------------------------
+    const title =
+        getString(match?.title) ||
+        "Cricket Match";
 
     const synopsis =
-        getValue(
-            match,
-            [
-                "synopsis"
-            ],
-            ""
-        );
+        getString(match?.synopsis) ||
+        "Live cricket coverage";
 
+    const status =
+        getString(match?.status) ||
+        "UPCOMING";
+
+    const time =
+        getString(match?.time) ||
+        "";
 
     const isLive =
-        status === "LIVE";
+        status.toUpperCase() === "LIVE";
 
-
-    const isCompleted =
-        status === "COMPLETED";
-
-
-    // --------------------------------------------------
-    // IMAGE HTML
-    // --------------------------------------------------
-
-    let imageHTML;
-
-
-    if (image) {
-
-        imageHTML = `
-            <img
-                class="match-image"
-                src="${escapeAttr(image)}"
-                alt="${escapeAttr(title)}"
-                loading="lazy"
-                onerror="this.style.display='none'; this.parentElement.classList.add('no-image')"
-            >
-        `;
-
-    } else {
-
-        imageHTML = `
-            <div class="no-image">
-                <span>🏏</span>
-            </div>
-        `;
-    }
-
-
-    // --------------------------------------------------
-    // STATUS
-    // --------------------------------------------------
-
-    let statusHTML = "";
-
-
-    if (isLive) {
-
-        statusHTML = `
-            <div class="status-badge live">
-                <span class="live-dot"></span>
-                LIVE
-            </div>
-        `;
-
-    } else if (isCompleted) {
-
-        statusHTML = `
-            <div class="status-badge completed">
-                COMPLETED
-            </div>
-        `;
-
-    } else {
-
-        statusHTML = `
-            <div class="status-badge upcoming">
-                UPCOMING
-            </div>
-        `;
-    }
-
-
-    // --------------------------------------------------
-    // TIME HTML
-    // --------------------------------------------------
-
-    const timeHTML =
-        matchTime
-            ? `
-                <div class="match-time">
-                    🕒 ${escapeHtml(matchTime)}
-                </div>
-              `
-            : "";
-
-
-    // --------------------------------------------------
-    // SYNOPSIS HTML
-    // --------------------------------------------------
-
-    const synopsisHTML =
-        synopsis
-            ? `
-                <div class="match-synopsis">
-                    ${escapeHtml(synopsis)}
-                </div>
-              `
-            : "";
-
-
-    // --------------------------------------------------
-    // CARD
-    // --------------------------------------------------
 
     card.innerHTML = `
 
-        <div class="match-poster">
+        <div class="match-image-wrapper">
 
-            ${imageHTML}
+            <img
+                class="match-image"
+                src="${escapeAttribute(image)}"
+                alt="${escapeAttribute(title)}"
+                loading="lazy"
+            >
 
-            ${statusHTML}
+            <div class="match-status ${isLive ? "live" : ""}">
+
+                ${
+                    isLive
+                    ? `<span class="live-dot"></span>`
+                    : ""
+                }
+
+                ${escapeHtml(status)}
+
+            </div>
 
         </div>
 
@@ -532,283 +259,420 @@ function createMatchCard(
                 ${escapeHtml(title)}
             </h2>
 
-
             <p class="match-tournament">
-                ${escapeHtml(tournament)}
+                ${escapeHtml(synopsis)}
             </p>
 
-
-            ${timeHTML}
-
-
-            ${synopsisHTML}
-
-
-            <div class="match-bottom">
-
-                <span class="match-id">
-                    #${escapeHtml(String(matchId))}
-                </span>
+            ${
+                time
+                ? `
+                    <div class="match-info">
+                        🕐 ${escapeHtml(time)}
+                    </div>
+                `
+                : ""
+            }
 
 
-                <button
-                    class="watch-btn"
-                    type="button"
-                >
-                    ${isLive ? "Watch Now" : "View Match"}
-                </button>
-
-            </div>
+            <button
+                class="watch-btn"
+                data-index="${index}"
+            >
+                ${isLive ? "▶ Watch Now" : "View Match"}
+            </button>
 
         </div>
     `;
 
 
-    // --------------------------------------------------
-    // WATCH BUTTON
-    // --------------------------------------------------
+    const button = card.querySelector(".watch-btn");
 
-    const watchButton =
-        card.querySelector(
-            ".watch-btn"
-        );
+    button.addEventListener("click", () => {
 
+        openMatch(match);
 
-    if (watchButton) {
-
-        watchButton.addEventListener(
-            "click",
-            () => {
-
-                openMatch(
-                    match,
-                    index
-                );
-            }
-        );
-    }
+    });
 
 
     return card;
 }
 
 
-// ======================================================
-// OPEN MATCH
-// ======================================================
+/* =========================================
+   FIND STREAM URL
+========================================= */
 
-function openMatch(
-    match,
-    index
-) {
+function getStreamUrl(match) {
 
-    console.log(
-        "SELECTED MATCH:",
-        match
+    /*
+       Your API has:
+
+       stream_url_alpha: {
+           "Fistly Server": "...",
+           "Amazon Server": "...",
+           "Akamai Server": "...",
+           "Cloudfront Server 1": "...",
+           "Cloudfront Server 2": "..."
+       }
+
+       Same structure for bravo.
+    */
+
+
+    const alpha = match?.stream_url_alpha || {};
+    const bravo = match?.stream_url_bravo || {};
+
+
+    const sources = [
+
+        alpha["Fistly Server"],
+        alpha["Amazon Server"],
+        alpha["Akamai Server"],
+        alpha["Cloudfront Server 1"],
+        alpha["Cloudfront Server 2"],
+
+        bravo["Fistly Server"],
+        bravo["Amazon Server"],
+        bravo["Akamai Server"],
+        bravo["Cloudfront Server 1"],
+        bravo["Cloudfront Server 2"]
+
+    ];
+
+
+    const validSource = sources.find(
+        url =>
+            typeof url === "string" &&
+            url.trim() !== ""
     );
 
 
-    console.log(
-        "MATCH JSON:",
-        JSON.stringify(
-            match,
-            null,
-            2
+    return validSource || null;
+}
+
+
+/* =========================================
+   OPEN MATCH
+========================================= */
+
+async function openMatch(match) {
+
+    console.log("SELECTED MATCH:", match);
+
+    const streamUrl = getStreamUrl(match);
+
+    console.log("SELECTED STREAM:", streamUrl);
+
+
+    if (!streamUrl) {
+
+        alert(
+            "Stream is not available for this match."
+        );
+
+        return;
+    }
+
+
+    /*
+       Detect DRM-protected stream.
+
+       Your supplied API contains:
+       cenc.mpd
+       + drm_key
+
+       Therefore Shaka needs the authorized
+       DRM license server configuration.
+    */
+
+    const hasDrm =
+        Boolean(match?.drm_key) ||
+        streamUrl.includes(".mpd");
+
+
+    if (hasDrm) {
+
+        openPlayer();
+
+        showPlayerMessage(
+            "This stream uses DRM protection. " +
+            "An authorized DRM license-server configuration " +
+            "is required for Shaka Player playback."
+        );
+
+        console.log(
+            "DRM STREAM:",
+            streamUrl
+        );
+
+        return;
+    }
+
+
+    /*
+       Non-DRM stream
+    */
+
+    await playWithShaka(streamUrl);
+}
+
+
+/* =========================================
+   SHAKA PLAY
+========================================= */
+
+async function playWithShaka(streamUrl) {
+
+    openPlayer();
+
+    clearPlayerMessage();
+
+
+    if (!shaka.Player.isBrowserSupported()) {
+
+        showPlayerMessage(
+            "This browser does not support Shaka Player."
+        );
+
+        return;
+    }
+
+
+    try {
+
+        if (shakaPlayer) {
+
+            await shakaPlayer.destroy();
+
+            shakaPlayer = null;
+        }
+
+
+        shakaPlayer = new shaka.Player(video);
+
+
+        shakaPlayer.addEventListener(
+            "error",
+            onShakaError
+        );
+
+
+        /*
+           IMPORTANT:
+
+           If your stream is protected by DRM,
+           put your AUTHORIZED license server here.
+
+           Example:
+
+           shakaPlayer.configure({
+               drm: {
+                   servers: {
+                       "com.widevine.alpha":
+                           "https://YOUR-LICENSE-SERVER"
+                   }
+               }
+           });
+
+           Do NOT put the raw drm_key here.
+        */
+
+
+        await shakaPlayer.load(streamUrl);
+
+
+        console.log(
+            "Shaka playback started:",
+            streamUrl
+        );
+
+    } catch (error) {
+
+        console.error(
+            "SHAKA LOAD ERROR:",
+            error
+        );
+
+        showPlayerMessage(
+            "Unable to play this stream.<br><br>" +
+            escapeHtml(
+                error?.message || "Playback error"
+            )
+        );
+    }
+}
+
+
+/* =========================================
+   SHAKA ERROR
+========================================= */
+
+function onShakaError(event) {
+
+    console.error(
+        "Shaka Error:",
+        event.detail
+    );
+
+    const error = event.detail;
+
+    showPlayerMessage(
+        "Player error: " +
+        escapeHtml(
+            error?.message || "Unknown playback error"
         )
     );
+}
 
 
-    // --------------------------------------------------
-    // OFFICIAL MATCH URL
-    // --------------------------------------------------
+/* =========================================
+   PLAYER OPEN
+========================================= */
 
-    const matchUrl =
-        match?.match_url;
+function openPlayer() {
 
+    playerModal.classList.add("active");
+
+    document.body.classList.add("player-open");
+}
+
+
+/* =========================================
+   PLAYER CLOSE
+========================================= */
+
+async function closeVideoPlayer() {
+
+    playerModal.classList.remove("active");
+
+    document.body.classList.remove("player-open");
+
+
+    try {
+
+        video.pause();
+
+        video.removeAttribute("src");
+
+        video.load();
+
+    } catch (error) {
+
+        console.warn(error);
+
+    }
+
+
+    if (shakaPlayer) {
+
+        try {
+
+            await shakaPlayer.destroy();
+
+        } catch (error) {
+
+            console.warn(
+                "Shaka destroy error:",
+                error
+            );
+
+        }
+
+        shakaPlayer = null;
+    }
+
+
+    clearPlayerMessage();
+}
+
+
+/* =========================================
+   PLAYER MESSAGE
+========================================= */
+
+function showPlayerMessage(message) {
+
+    playerMessage.innerHTML = message;
+
+    playerMessage.style.display = "block";
+}
+
+
+function clearPlayerMessage() {
+
+    playerMessage.innerHTML = "";
+
+    playerMessage.style.display = "none";
+}
+
+
+/* =========================================
+   LOADER
+========================================= */
+
+function showLoader() {
+
+    loader.style.display = "flex";
+}
+
+
+function hideLoader() {
+
+    loader.style.display = "none";
+}
+
+
+/* =========================================
+   ERROR
+========================================= */
+
+function showError(message) {
+
+    errorBox.innerHTML = message;
+
+    errorBox.style.display = "block";
+}
+
+
+function hideError() {
+
+    errorBox.style.display = "none";
+
+    errorBox.innerHTML = "";
+}
+
+
+/* =========================================
+   HELPERS
+========================================= */
+
+function getString(value) {
 
     if (
-        typeof matchUrl === "string" &&
-        matchUrl.trim() !== ""
+        typeof value === "string" &&
+        value.trim() !== ""
     ) {
 
-        window.open(
-            matchUrl.trim(),
-            "_blank",
-            "noopener,noreferrer"
-        );
+        return value.trim();
 
-        return;
     }
 
-
-    // --------------------------------------------------
-    // FALLBACK
-    // --------------------------------------------------
-
-    const matchId =
-        getValue(
-            match,
-            [
-                "match_id",
-                "id",
-                "matchId"
-            ],
-            index
-        );
-
-
-    alert(
-        `Match ID: ${matchId}\n\n` +
-        "Official match URL is not available."
-    );
+    return "";
 }
 
-
-// ======================================================
-// GET VALUE
-// ======================================================
-
-function getValue(
-    object,
-    keys,
-    fallback = ""
-) {
-
-    if (!object) {
-        return fallback;
-    }
-
-
-    for (
-        const key of keys
-    ) {
-
-        const value =
-            object[key];
-
-
-        if (
-            value !== undefined &&
-            value !== null &&
-            String(value).trim() !== ""
-        ) {
-
-            return value;
-        }
-    }
-
-
-    return fallback;
-}
-
-
-// ======================================================
-// SHOW ERROR
-// ======================================================
-
-function showError(error) {
-
-    if (!errorBox) {
-        return;
-    }
-
-
-    const message =
-        error?.message ||
-        "Unknown error";
-
-
-    errorBox.innerHTML = `
-
-        <div class="error-title">
-            Matches load nahi ho paaye
-        </div>
-
-
-        <div class="error-message">
-            ${escapeHtml(message)}
-        </div>
-
-
-        <div class="error-help">
-            API response ko Console me check karo.
-        </div>
-
-    `;
-
-
-    errorBox.style.display =
-        "block";
-}
-
-
-// ======================================================
-// HTML ESCAPE
-// ======================================================
 
 function escapeHtml(value) {
 
     return String(value)
-
-        .replace(
-            /&/g,
-            "&amp;"
-        )
-
-        .replace(
-            /</g,
-            "&lt;"
-        )
-
-        .replace(
-            />/g,
-            "&gt;"
-        )
-
-        .replace(
-            /"/g,
-            "&quot;"
-        )
-
-        .replace(
-            /'/g,
-            "&#039;"
-        );
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 
-function escapeAttr(value) {
+function escapeAttribute(value) {
 
     return escapeHtml(value);
 }
-
-
-// ======================================================
-// REFRESH BUTTON
-// ======================================================
-
-if (refreshBtn) {
-
-    refreshBtn.addEventListener(
-        "click",
-        loadMatches
-    );
-}
-
-
-// ======================================================
-// INITIAL LOAD
-// ======================================================
-
-loadMatches();
-
-
-// ======================================================
-// AUTO REFRESH
-// Every 30 seconds
-// ======================================================
-
-setInterval(
-    loadMatches,
-    30000
-);
