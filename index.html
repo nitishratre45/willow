@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>CricZone - Live Matches</title>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+  <header class="header">
+    <div class="logo">
+      CRIC<span>ZONE</span>
+    </div>
+
+    <button id="refreshBtn" class="refresh-btn">
+      ↻ Refresh
+    </button>
+  </header>
+
+  <main class="container">
+
+    <div class="heading">
+      <div>
+        <h1>Live Matches</h1>
+        <p id="status">Loading matches...</p>
+      </div>
+    </div>
+
+    <div id="loader" class="loader">
+      <div class="spinner"></div>
+      <p>Loading matches...</p>
+    </div>
+
+    <div id="errorBox" class="error-box" style="display:none;"></div>
+
+    <section id="matchesGrid" class="matches-grid"></section>
+
+    <div id="emptyBox" class="empty-box" style="display:none;">
+      No matches available.
+    </div>
+
+  </main>
+
+  <script src="app.js"></script>
+
+</body>
+</html>
