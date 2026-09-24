@@ -1,50 +1,74 @@
-export default async function handler(req, res) {
-  const API_URL = "https://skmkc.freeshow.fun/api/matches";
+import fs from "fs";
+import path from "path";
 
-  try {
-    const response = await fetch(API_URL, {
-      method: "GET",
-      headers: {
-        "Accept": "application/json"
-      },
-      cache: "no-store"
-    });
-
-    const text = await response.text();
-
-    if (!response.ok) {
-      return res.status(response.status).json({
-        error: "Upstream API error",
-        status: response.status,
-        response: text
-      });
-    }
-
-    let data;
+export default function handler(req, res) {
 
     try {
-      data = JSON.parse(text);
-    } catch {
-      return res.status(502).json({
-        error: "Upstream did not return valid JSON",
-        response: text
-      });
+
+        // JSON file location
+        const filePath = path.join(
+            process.cwd(),
+            "data",
+            "matches.json"
+        );
+
+        // Read JSON
+        const file = fs.readFileSync(
+            filePath,
+            "utf8"
+        );
+
+        const data = JSON.parse(file);
+
+
+        // CORS
+        res.setHeader(
+            "Access-Control-Allow-Origin",
+            "*"
+        );
+
+        res.setHeader(
+            "Access-Control-Allow-Methods",
+            "GET, OPTIONS"
+        );
+
+        res.setHeader(
+            "Content-Type",
+            "application/json"
+        );
+
+        // OPTIONS request
+        if (req.method === "OPTIONS") {
+
+            return res.status(200).end();
+
+        }
+
+
+        // Only GET
+        if (req.method !== "GET") {
+
+            return res.status(405).json({
+                error: "Method not allowed"
+            });
+
+        }
+
+
+        // Return matches JSON
+        return res.status(200).json(data);
+
+    } catch (error) {
+
+        console.error(
+            "MATCH API ERROR:",
+            error
+        );
+
+        return res.status(500).json({
+            error: "Failed to load matches",
+            message: error.message
+        });
+
     }
-
-    res.setHeader(
-      "Cache-Control",
-      "no-store, max-age=0"
-    );
-
-    return res.status(200).json(data);
-
-  } catch (error) {
-
-    console.error(error);
-
-    return res.status(500).json({
-      error: "Proxy request failed",
-      message: error.message
-    });
-  }
 }
