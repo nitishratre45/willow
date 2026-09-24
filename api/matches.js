@@ -1,6 +1,59 @@
 import fs from "fs";
 import path from "path";
 
+function extractFirstJsonObject(text) {
+    const start = text.indexOf("{");
+
+    if (start === -1) {
+        throw new Error("JSON object not found");
+    }
+
+    let depth = 0;
+    let inString = false;
+    let escaped = false;
+
+    for (let i = start; i < text.length; i++) {
+
+        const char = text[i];
+
+        if (escaped) {
+            escaped = false;
+            continue;
+        }
+
+        if (char === "\\") {
+            if (inString) {
+                escaped = true;
+            }
+            continue;
+        }
+
+        if (char === '"') {
+            inString = !inString;
+            continue;
+        }
+
+        if (inString) {
+            continue;
+        }
+
+        if (char === "{") {
+            depth++;
+        }
+
+        if (char === "}") {
+            depth--;
+
+            if (depth === 0) {
+                return text.slice(start, i + 1);
+            }
+        }
+    }
+
+    throw new Error("Incomplete JSON object");
+}
+
+
 export default function handler(req, res) {
 
     if (req.method !== "GET") {
@@ -20,39 +73,25 @@ export default function handler(req, res) {
         let raw = fs.readFileSync(
             filePath,
             "utf8"
-        ).trim();
+        );
 
+        // Remove BOM
+        raw = raw.replace(/^\uFEFF/, "");
 
-        // Remove markdown code fences if accidentally pasted
+        // Remove markdown fences if present
         raw = raw
-            .replace(/^```json\s*/i, "")
-            .replace(/^```\s*/i, "")
-            .replace(/\s*```$/i, "")
+            .replace(/```json/gi, "")
+            .replace(/```/g, "")
             .trim();
 
 
-        // Find the actual JSON object
-        const firstBrace = raw.indexOf("{");
-        const lastBrace = raw.lastIndexOf("}");
-
-        if (
-            firstBrace === -1 ||
-            lastBrace === -1 ||
-            lastBrace <= firstBrace
-        ) {
-            throw new Error(
-                "Valid JSON object not found in matches.json"
-            );
-        }
+        // Extract ONLY the first complete JSON object
+        const jsonText =
+            extractFirstJsonObject(raw);
 
 
-        raw = raw.substring(
-            firstBrace,
-            lastBrace + 1
-        );
-
-
-        const data = JSON.parse(raw);
+        const data =
+            JSON.parse(jsonText);
 
 
         res.setHeader(
