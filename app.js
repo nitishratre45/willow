@@ -1,5 +1,4 @@
-const API_URL =
-  "https://skmkc.freeshow.fun/api/matches";
+const API_URL = "/api/matches";
 
 
 const matchesGrid =
