@@ -1,477 +1,583 @@
 const API_URL = "/api/matches";
 
-
-const matchesGrid =
-  document.getElementById("matchesGrid");
-
-const loader =
-  document.getElementById("loader");
-
-const errorBox =
-  document.getElementById("errorBox");
-
-const emptyBox =
-  document.getElementById("emptyBox");
-
-const statusText =
-  document.getElementById("status");
-
-const refreshBtn =
-  document.getElementById("refreshBtn");
+const matchesGrid = document.getElementById("matchesGrid");
+const loader = document.getElementById("loader");
+const errorBox = document.getElementById("errorBox");
+const emptyBox = document.getElementById("emptyBox");
+const statusText = document.getElementById("status");
+const refreshBtn = document.getElementById("refreshBtn");
 
 
-// ------------------------------------
-// Load matches
-// ------------------------------------
+// ========================================
+// LOAD MATCHES
+// ========================================
 
 async function loadMatches() {
 
-  showLoader();
+    loader.style.display = "flex";
+    errorBox.style.display = "none";
+    emptyBox.style.display = "none";
 
-  try {
+    matchesGrid.innerHTML = "";
 
-    const response = await fetch(API_URL, {
-      method: "GET",
-      cache: "no-store"
-    });
+    statusText.textContent = "Loading matches...";
 
-    if (!response.ok) {
-      throw new Error(
-        `API Error: ${response.status} ${response.statusText}`
-      );
+    refreshBtn.disabled = true;
+    refreshBtn.textContent = "↻ Loading...";
+
+    try {
+
+        const response = await fetch(API_URL, {
+            method: "GET",
+            headers: {
+                "Accept": "application/json"
+            },
+            cache: "no-store"
+        });
+
+        const contentType =
+            response.headers.get("content-type") || "";
+
+        let data;
+
+        if (contentType.includes("application/json")) {
+            data = await response.json();
+        } else {
+            const text = await response.text();
+
+            throw new Error(
+                `Server returned ${response.status}: ${text}`
+            );
+        }
+
+
+        // --------------------------------
+        // API ERROR
+        // --------------------------------
+
+        if (!response.ok) {
+
+            console.error(
+                "API RESPONSE:",
+                data
+            );
+
+            throw new Error(
+                data?.error ||
+                `API Error: ${response.status}`
+            );
+        }
+
+
+        console.log(
+            "MATCH API RESPONSE:",
+            data
+        );
+
+
+        // --------------------------------
+        // FIND MATCH ARRAY
+        // --------------------------------
+
+        const matches =
+            getMatchesArray(data);
+
+
+        if (!matches.length) {
+
+            emptyBox.style.display = "block";
+
+            statusText.textContent =
+                "No matches found";
+
+            return;
+        }
+
+
+        // --------------------------------
+        // RENDER
+        // --------------------------------
+
+        renderMatches(matches);
+
+        statusText.textContent =
+            `${matches.length} matches found`;
+
     }
 
-    const data = await response.json();
+    catch (error) {
 
-    console.log("API RESPONSE:", data);
+        console.error(
+            "Match API Error:",
+            error
+        );
 
-    const matches = normalizeMatches(data);
+        showError(error);
 
-    renderMatches(matches);
+        statusText.textContent =
+            "Unable to load matches";
 
-    statusText.textContent =
-      `${matches.length} matches found`;
+    }
 
-  } catch (error) {
+    finally {
 
-    console.error("Match API Error:", error);
+        loader.style.display = "none";
 
-    showError(
-      "Matches load nahi ho paaye.<br><br>" +
-      `<strong>${escapeHtml(error.message)}</strong><br><br>` +
-      "Agar browser CORS block kar raha hai, API ko same-origin " +
-      "backend/proxy ke through load karna hoga."
-    );
-
-  } finally {
-
-    loader.style.display = "none";
-
-  }
+        refreshBtn.disabled = false;
+        refreshBtn.textContent = "↻ Refresh";
+    }
 }
 
 
-// ------------------------------------
-// Normalize API response
-// ------------------------------------
+// ========================================
+// GET MATCH ARRAY
+// ========================================
 
-function normalizeMatches(data) {
+function getMatchesArray(data) {
 
-  if (Array.isArray(data)) {
-    return data;
-  }
+    if (Array.isArray(data)) {
+        return data;
+    }
 
-  if (
-    data &&
-    Array.isArray(data.matches)
-  ) {
-    return data.matches;
-  }
+    if (
+        data &&
+        Array.isArray(data.matches)
+    ) {
+        return data.matches;
+    }
 
-  if (
-    data &&
-    Array.isArray(data.data)
-  ) {
-    return data.data;
-  }
+    if (
+        data &&
+        Array.isArray(data.data)
+    ) {
+        return data.data;
+    }
 
-  return [];
+    if (
+        data &&
+        data.data &&
+        Array.isArray(data.data.matches)
+    ) {
+        return data.data.matches;
+    }
+
+    return [];
 }
 
 
-// ------------------------------------
-// Render matches
-// ------------------------------------
+// ========================================
+// RENDER MATCHES
+// ========================================
 
 function renderMatches(matches) {
 
-  matchesGrid.innerHTML = "";
+    matchesGrid.innerHTML = "";
 
-  if (!matches.length) {
+    matches.forEach((match, index) => {
 
-    emptyBox.style.display = "block";
+        const card =
+            createMatchCard(match, index);
 
-    return;
-  }
-
-  emptyBox.style.display = "none";
-
-  matches.forEach((match, index) => {
-
-    const card =
-      createMatchCard(match, index);
-
-    matchesGrid.appendChild(card);
-
-  });
+        matchesGrid.appendChild(card);
+    });
 }
 
 
-// ------------------------------------
-// Create match card
-// ------------------------------------
+// ========================================
+// CREATE CARD
+// ========================================
 
 function createMatchCard(match, index) {
 
-  const card =
-    document.createElement("article");
+    const card =
+        document.createElement("article");
 
-  card.className = "match-card";
-
-
-  const title =
-    getValue(
-      match,
-      [
-        "title",
-        "name",
-        "match_name",
-        "match_title"
-      ],
-      "Live Match"
-    );
+    card.className = "match-card";
 
 
-  const tournament =
-    getValue(
-      match,
-      [
-        "tournament",
-        "series",
-        "league",
-        "competition"
-      ],
-      "Cricket"
-    );
-
-
-  const status =
-    String(
-      getValue(
+    const title = getValue(
         match,
         [
-          "status",
-          "state"
+            "title",
+            "name",
+            "match_name",
+            "match_title"
         ],
-        "LIVE"
-      )
+        "Cricket Match"
+    );
+
+
+    const tournament = getValue(
+        match,
+        [
+            "tournament",
+            "series",
+            "league",
+            "competition"
+        ],
+        "Cricket"
+    );
+
+
+    const status = String(
+        getValue(
+            match,
+            [
+                "status",
+                "state"
+            ],
+            "LIVE"
+        )
     ).toUpperCase();
 
 
-  const image =
-    getValue(
-      match,
-      [
-        "image",
-        "thumbnail",
-        "poster",
-        "logo"
-      ],
-      ""
+    const image = getValue(
+        match,
+        [
+            "image",
+            "thumbnail",
+            "poster",
+            "logo"
+        ],
+        ""
     );
 
 
-  const matchId =
-    getValue(
-      match,
-      [
-        "match_id",
-        "id",
-        "matchId"
-      ],
-      index
+    const matchId = getValue(
+        match,
+        [
+            "match_id",
+            "id",
+            "matchId"
+        ],
+        index
     );
 
 
-  card.innerHTML = `
+    const isLive =
+        status === "LIVE";
 
-    ${
-      image
-        ? `
-          <img
-            class="match-image"
-            src="${escapeAttribute(image)}"
-            alt="${escapeAttribute(title)}"
-            loading="lazy"
-            onerror="this.style.display='none'"
-          >
-        `
-        : `
-          <div class="match-image"></div>
-        `
-    }
 
-    <div class="match-content">
+    card.innerHTML = `
 
-      <div class="match-status">
+        <div class="match-poster">
 
-        ${
-          status === "LIVE"
-            ? `<span class="live-dot"></span>`
-            : ""
+            ${
+                image
+                    ? `
+                        <img
+                            src="${escapeAttr(image)}"
+                            alt="${escapeAttr(title)}"
+                            loading="lazy"
+                            onerror="this.parentElement.classList.add('no-image')"
+                        >
+                    `
+                    : `
+                        <div class="no-image">
+                            <span>🏏</span>
+                        </div>
+                    `
+            }
+
+            <div class="status-badge ${isLive ? "live" : ""}">
+                ${
+                    isLive
+                        ? '<span class="live-dot"></span>'
+                        : ""
+                }
+
+                ${escapeHtml(status)}
+            </div>
+
+        </div>
+
+
+        <div class="match-content">
+
+            <h2 class="match-title">
+                ${escapeHtml(title)}
+            </h2>
+
+            <p class="match-tournament">
+                ${escapeHtml(tournament)}
+            </p>
+
+
+            <div class="match-bottom">
+
+                <span class="match-id">
+                    #${escapeHtml(String(matchId))}
+                </span>
+
+                <button
+                    class="watch-btn"
+                    type="button"
+                >
+                    Watch Now
+                </button>
+
+            </div>
+
+        </div>
+    `;
+
+
+    const watchButton =
+        card.querySelector(".watch-btn");
+
+
+    watchButton.addEventListener(
+        "click",
+        () => {
+
+            openMatch(
+                match,
+                index
+            );
+
         }
-
-        ${escapeHtml(status)}
-
-      </div>
-
-      <div class="match-title">
-        ${escapeHtml(title)}
-      </div>
-
-      <div class="match-tournament">
-        ${escapeHtml(tournament)}
-      </div>
-
-      <div class="match-info">
-
-        <span class="match-id">
-          ID: ${escapeHtml(String(matchId))}
-        </span>
-
-        <button
-          class="watch-btn"
-          type="button"
-        >
-          Watch
-        </button>
-
-      </div>
-
-    </div>
-  `;
-
-
-  const watchBtn =
-    card.querySelector(".watch-btn");
-
-
-  watchBtn.addEventListener(
-    "click",
-    () => {
-
-      console.log(
-        "Selected match:",
-        match
-      );
-
-      openMatch(match);
-
-    }
-  );
-
-
-  return card;
-}
-
-
-// ------------------------------------
-// Open match
-// ------------------------------------
-
-function openMatch(match) {
-
-  console.log(
-    "FULL MATCH DATA:",
-    match
-  );
-
-  /*
-    Abhi API ke exact player URL ko assume
-    nahi kar rahe hain.
-
-    Pehle console me complete match object
-    dekho.
-
-    Agar stream URL milta hai to yahan use
-    kar sakte ho.
-  */
-
-  const streamUrl =
-    findStreamUrl(match);
-
-
-  if (streamUrl) {
-
-    window.open(
-      streamUrl,
-      "_blank"
     );
 
-    return;
-  }
 
-
-  alert(
-    "Is match object me direct stream URL nahi mila.\n\n" +
-    "Console me FULL MATCH DATA check karo."
-  );
+    return card;
 }
 
 
-// ------------------------------------
-// Find stream URL
-// ------------------------------------
+// ========================================
+// OPEN MATCH
+// ========================================
+
+function openMatch(match, index) {
+
+    console.log(
+        "SELECTED MATCH:",
+        match
+    );
+
+
+    // Show complete object for debugging
+    console.log(
+        "MATCH JSON:",
+        JSON.stringify(
+            match,
+            null,
+            2
+        )
+    );
+
+
+    const streamUrl =
+        findStreamUrl(match);
+
+
+    if (streamUrl) {
+
+        window.open(
+            streamUrl,
+            "_blank"
+        );
+
+        return;
+    }
+
+
+    /*
+     * No direct stream URL found.
+     *
+     * For now show the match data instead
+     * of assuming an incorrect player URL.
+     */
+
+    const matchId =
+        getValue(
+            match,
+            [
+                "match_id",
+                "id",
+                "matchId"
+            ],
+            index
+        );
+
+
+    alert(
+        `Match ID: ${matchId}\n\n` +
+        "Direct stream URL is not available in this API object."
+    );
+}
+
+
+// ========================================
+// FIND STREAM URL
+// ========================================
 
 function findStreamUrl(match) {
 
-  const streams =
-    match?.streams || {};
+    const streams =
+        match?.streams || {};
 
 
-  const possibleUrls = [
+    const possibleUrls = [
 
-    match?.stream_url,
-    match?.streamUrl,
-    match?.url,
+        match?.stream_url,
 
-    streams?.primary,
-    streams?.stream_url,
-    streams?.url,
+        match?.streamUrl,
 
-    streams?.fancode_cdn,
-    streams?.fancode_lk_cdn,
-    streams?.fancode_np_cdn,
-    streams?.fancode_bd_cdn
+        match?.stream,
 
-  ];
+        match?.url,
+
+        streams?.primary,
+
+        streams?.stream_url,
+
+        streams?.stream,
+
+        streams?.url,
+
+        streams?.fancode_cdn,
+
+        streams?.fancode_lk_cdn,
+
+        streams?.fancode_np_cdn,
+
+        streams?.fancode_bd_cdn
+
+    ];
 
 
-  return possibleUrls.find(
-    url =>
-      typeof url === "string" &&
-      url.trim() !== ""
-  ) || null;
-}
+    for (const url of possibleUrls) {
 
+        if (
+            typeof url === "string" &&
+            url.trim().length > 0
+        ) {
 
-// ------------------------------------
-// Get value
-// ------------------------------------
-
-function getValue(
-  object,
-  keys,
-  fallback = ""
-) {
-
-  for (const key of keys) {
-
-    if (
-      object &&
-      object[key] !== undefined &&
-      object[key] !== null &&
-      object[key] !== ""
-    ) {
-
-      return object[key];
-
+            return url.trim();
+        }
     }
 
-  }
 
-  return fallback;
+    return null;
 }
 
 
-// ------------------------------------
-// Loading
-// ------------------------------------
+// ========================================
+// GET VALUE
+// ========================================
 
-function showLoader() {
+function getValue(
+    object,
+    keys,
+    fallback = ""
+) {
 
-  loader.style.display = "flex";
+    if (!object) {
+        return fallback;
+    }
 
-  errorBox.style.display = "none";
 
-  emptyBox.style.display = "none";
+    for (const key of keys) {
 
-  matchesGrid.innerHTML = "";
+        const value =
+            object[key];
 
-  statusText.textContent =
-    "Loading matches...";
 
+        if (
+            value !== undefined &&
+            value !== null &&
+            String(value).trim() !== ""
+        ) {
+
+            return value;
+        }
+    }
+
+
+    return fallback;
 }
 
 
-// ------------------------------------
-// Error
-// ------------------------------------
+// ========================================
+// ERROR
+// ========================================
 
-function showError(message) {
+function showError(error) {
 
-  errorBox.innerHTML = message;
+    let message =
+        error?.message ||
+        "Unknown error";
 
-  errorBox.style.display = "block";
 
-  matchesGrid.innerHTML = "";
+    errorBox.innerHTML = `
 
+        <div class="error-title">
+            Matches load nahi ho paaye
+        </div>
+
+        <div class="error-message">
+            ${escapeHtml(message)}
+        </div>
+
+        <div class="error-help">
+            API response ko Console me check karo.
+        </div>
+
+    `;
+
+
+    errorBox.style.display =
+        "block";
 }
 
 
-// ------------------------------------
-// HTML escaping
-// ------------------------------------
+// ========================================
+// HTML ESCAPE
+// ========================================
 
 function escapeHtml(value) {
 
-  return String(value)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
 }
 
 
-function escapeAttribute(value) {
+function escapeAttr(value) {
 
-  return escapeHtml(value);
+    return escapeHtml(value);
 }
 
 
-// ------------------------------------
-// Refresh
-// ------------------------------------
+// ========================================
+// REFRESH BUTTON
+// ========================================
 
-refreshBtn.addEventListener(
-  "click",
-  loadMatches
-);
+if (refreshBtn) {
+
+    refreshBtn.addEventListener(
+        "click",
+        loadMatches
+    );
+}
 
 
-// ------------------------------------
-// Initial load
-// ------------------------------------
+// ========================================
+// INITIAL LOAD
+// ========================================
 
 loadMatches();
 
 
-// ------------------------------------
-// Auto refresh every 30 seconds
-// ------------------------------------
+// ========================================
+// AUTO REFRESH
+// Every 30 seconds
+// ========================================
 
 setInterval(
-  loadMatches,
-  30000
+    loadMatches,
+    30000
 );
