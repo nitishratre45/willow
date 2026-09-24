@@ -8,22 +8,38 @@ const statusText = document.getElementById("status");
 const refreshBtn = document.getElementById("refreshBtn");
 
 
-// ========================================
+// ======================================================
 // LOAD MATCHES
-// ========================================
+// ======================================================
 
 async function loadMatches() {
 
-    loader.style.display = "flex";
-    errorBox.style.display = "none";
-    emptyBox.style.display = "none";
+    if (loader) {
+        loader.style.display = "flex";
+    }
 
-    matchesGrid.innerHTML = "";
+    if (errorBox) {
+        errorBox.style.display = "none";
+        errorBox.innerHTML = "";
+    }
 
-    statusText.textContent = "Loading matches...";
+    if (emptyBox) {
+        emptyBox.style.display = "none";
+    }
 
-    refreshBtn.disabled = true;
-    refreshBtn.textContent = "↻ Loading...";
+    if (matchesGrid) {
+        matchesGrid.innerHTML = "";
+    }
+
+    if (statusText) {
+        statusText.textContent = "Loading matches...";
+    }
+
+    if (refreshBtn) {
+        refreshBtn.disabled = true;
+        refreshBtn.textContent = "↻ Loading...";
+    }
+
 
     try {
 
@@ -35,15 +51,26 @@ async function loadMatches() {
             cache: "no-store"
         });
 
+
         const contentType =
             response.headers.get("content-type") || "";
 
+
         let data;
 
+
+        // --------------------------------------------------
+        // JSON RESPONSE
+        // --------------------------------------------------
+
         if (contentType.includes("application/json")) {
+
             data = await response.json();
+
         } else {
-            const text = await response.text();
+
+            const text =
+                await response.text();
 
             throw new Error(
                 `Server returned ${response.status}: ${text}`
@@ -51,9 +78,15 @@ async function loadMatches() {
         }
 
 
-        // --------------------------------
+        console.log(
+            "MATCH API RESPONSE:",
+            data
+        );
+
+
+        // --------------------------------------------------
         // API ERROR
-        // --------------------------------
+        // --------------------------------------------------
 
         if (!response.ok) {
 
@@ -69,40 +102,53 @@ async function loadMatches() {
         }
 
 
+        // --------------------------------------------------
+        // GET MATCHES
+        // --------------------------------------------------
+
+        const matches =
+            getMatchesArray(data);
+
+
         console.log(
-            "MATCH API RESPONSE:",
-            data
+            "MATCHES:",
+            matches
         );
 
 
-        // --------------------------------
-        // FIND MATCH ARRAY
-        // --------------------------------
-
-       const matches = data.Matches || [];
-
+        // --------------------------------------------------
+        // NO MATCHES
+        // --------------------------------------------------
 
         if (!matches.length) {
 
-            emptyBox.style.display = "block";
+            if (emptyBox) {
+                emptyBox.style.display = "block";
+            }
 
-            statusText.textContent =
-                "No matches found";
+            if (statusText) {
+                statusText.textContent =
+                    "No matches found";
+            }
 
             return;
         }
 
 
-        // --------------------------------
+        // --------------------------------------------------
         // RENDER
-        // --------------------------------
+        // --------------------------------------------------
 
         renderMatches(matches);
 
-        statusText.textContent =
-            `${matches.length} matches found`;
+
+        if (statusText) {
+            statusText.textContent =
+                `${matches.length} matches found`;
+        }
 
     }
+
 
     catch (error) {
 
@@ -113,180 +159,369 @@ async function loadMatches() {
 
         showError(error);
 
-        statusText.textContent =
-            "Unable to load matches";
+        if (statusText) {
+            statusText.textContent =
+                "Unable to load matches";
+        }
 
     }
 
+
     finally {
 
-        loader.style.display = "none";
+        if (loader) {
+            loader.style.display = "none";
+        }
 
-        refreshBtn.disabled = false;
-        refreshBtn.textContent = "↻ Refresh";
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+            refreshBtn.textContent = "↻ Refresh";
+        }
     }
 }
 
 
-// ========================================
+// ======================================================
 // GET MATCH ARRAY
-// ========================================
+// ======================================================
 
 function getMatchesArray(data) {
 
-    if (Array.isArray(data)) {
-        return data;
+    // Exact structure from your API
+    if (
+        data &&
+        Array.isArray(data.Matches)
+    ) {
+
+        return data.Matches;
     }
 
+
+    // Lowercase fallback
     if (
         data &&
         Array.isArray(data.matches)
     ) {
+
         return data.matches;
     }
 
+
+    // Direct array fallback
+    if (Array.isArray(data)) {
+
+        return data;
+    }
+
+
+    // Other possible API structures
     if (
         data &&
         Array.isArray(data.data)
     ) {
+
         return data.data;
     }
+
+
+    if (
+        data &&
+        data.data &&
+        Array.isArray(data.data.Matches)
+    ) {
+
+        return data.data.Matches;
+    }
+
 
     if (
         data &&
         data.data &&
         Array.isArray(data.data.matches)
     ) {
+
         return data.data.matches;
     }
+
 
     return [];
 }
 
 
-// ========================================
+// ======================================================
 // RENDER MATCHES
-// ========================================
+// ======================================================
 
 function renderMatches(matches) {
 
+    if (!matchesGrid) {
+        return;
+    }
+
+
     matchesGrid.innerHTML = "";
 
-    matches.forEach((match, index) => {
 
-        const card =
-            createMatchCard(match, index);
+    matches.forEach(
+        (match, index) => {
 
-        matchesGrid.appendChild(card);
-    });
+            const card =
+                createMatchCard(
+                    match,
+                    index
+                );
+
+            matchesGrid.appendChild(card);
+        }
+    );
 }
 
 
-// ========================================
-// CREATE CARD
-// ========================================
+// ======================================================
+// CREATE MATCH CARD
+// ======================================================
 
-function createMatchCard(match, index) {
+function createMatchCard(
+    match,
+    index
+) {
 
     const card =
         document.createElement("article");
 
-    card.className = "match-card";
+
+    card.className =
+        "match-card";
 
 
-    const title = getValue(
-        match,
-        [
-            "title",
-            "name",
-            "match_name",
-            "match_title"
-        ],
-        "Cricket Match"
-    );
+    // --------------------------------------------------
+    // TITLE
+    // --------------------------------------------------
 
-
-    const tournament = getValue(
-        match,
-        [
-            "tournament",
-            "series",
-            "league",
-            "competition"
-        ],
-        "Cricket"
-    );
-
-
-    const status = String(
+    const title =
         getValue(
             match,
             [
-                "status",
-                "state"
+                "title",
+                "name",
+                "match_name",
+                "match_title"
             ],
-            "LIVE"
+            "Cricket Match"
+        );
+
+
+    // --------------------------------------------------
+    // TOURNAMENT
+    // --------------------------------------------------
+
+    const tournament =
+        getValue(
+            match,
+            [
+                "tournament",
+                "series",
+                "league",
+                "competition"
+            ],
+            "Cricket"
+        );
+
+
+    // --------------------------------------------------
+    // STATUS
+    // --------------------------------------------------
+
+    const status =
+        String(
+            getValue(
+                match,
+                [
+                    "status",
+                    "state"
+                ],
+                "UPCOMING"
+            )
         )
-    ).toUpperCase();
+        .toUpperCase();
 
 
-    const image = getValue(
-        match,
-        [
-            "image",
-            "thumbnail",
-            "poster",
-            "logo"
-        ],
-        ""
-    );
+    // --------------------------------------------------
+    // IMAGE
+    // IMPORTANT: API USES cover_image
+    // --------------------------------------------------
+
+    const image =
+        getValue(
+            match,
+            [
+                "cover_image",
+                "image",
+                "thumbnail",
+                "poster",
+                "logo"
+            ],
+            ""
+        );
 
 
-    const matchId = getValue(
-        match,
-        [
-            "match_id",
-            "id",
-            "matchId"
-        ],
-        index
-    );
+    // --------------------------------------------------
+    // MATCH ID
+    // --------------------------------------------------
+
+    const matchId =
+        getValue(
+            match,
+            [
+                "match_id",
+                "id",
+                "matchId"
+            ],
+            index
+        );
+
+
+    // --------------------------------------------------
+    // TIME
+    // --------------------------------------------------
+
+    const matchTime =
+        getValue(
+            match,
+            [
+                "time",
+                "match_time",
+                "start_time",
+                "startTime"
+            ],
+            ""
+        );
+
+
+    // --------------------------------------------------
+    // SYNOPSIS
+    // --------------------------------------------------
+
+    const synopsis =
+        getValue(
+            match,
+            [
+                "synopsis"
+            ],
+            ""
+        );
 
 
     const isLive =
         status === "LIVE";
 
 
+    const isCompleted =
+        status === "COMPLETED";
+
+
+    // --------------------------------------------------
+    // IMAGE HTML
+    // --------------------------------------------------
+
+    let imageHTML;
+
+
+    if (image) {
+
+        imageHTML = `
+            <img
+                class="match-image"
+                src="${escapeAttr(image)}"
+                alt="${escapeAttr(title)}"
+                loading="lazy"
+                onerror="this.style.display='none'; this.parentElement.classList.add('no-image')"
+            >
+        `;
+
+    } else {
+
+        imageHTML = `
+            <div class="no-image">
+                <span>🏏</span>
+            </div>
+        `;
+    }
+
+
+    // --------------------------------------------------
+    // STATUS
+    // --------------------------------------------------
+
+    let statusHTML = "";
+
+
+    if (isLive) {
+
+        statusHTML = `
+            <div class="status-badge live">
+                <span class="live-dot"></span>
+                LIVE
+            </div>
+        `;
+
+    } else if (isCompleted) {
+
+        statusHTML = `
+            <div class="status-badge completed">
+                COMPLETED
+            </div>
+        `;
+
+    } else {
+
+        statusHTML = `
+            <div class="status-badge upcoming">
+                UPCOMING
+            </div>
+        `;
+    }
+
+
+    // --------------------------------------------------
+    // TIME HTML
+    // --------------------------------------------------
+
+    const timeHTML =
+        matchTime
+            ? `
+                <div class="match-time">
+                    🕒 ${escapeHtml(matchTime)}
+                </div>
+              `
+            : "";
+
+
+    // --------------------------------------------------
+    // SYNOPSIS HTML
+    // --------------------------------------------------
+
+    const synopsisHTML =
+        synopsis
+            ? `
+                <div class="match-synopsis">
+                    ${escapeHtml(synopsis)}
+                </div>
+              `
+            : "";
+
+
+    // --------------------------------------------------
+    // CARD
+    // --------------------------------------------------
+
     card.innerHTML = `
 
         <div class="match-poster">
 
-            ${
-                image
-                    ? `
-                        <img
-                            src="${escapeAttr(image)}"
-                            alt="${escapeAttr(title)}"
-                            loading="lazy"
-                            onerror="this.parentElement.classList.add('no-image')"
-                        >
-                    `
-                    : `
-                        <div class="no-image">
-                            <span>🏏</span>
-                        </div>
-                    `
-            }
+            ${imageHTML}
 
-            <div class="status-badge ${isLive ? "live" : ""}">
-                ${
-                    isLive
-                        ? '<span class="live-dot"></span>'
-                        : ""
-                }
-
-                ${escapeHtml(status)}
-            </div>
+            ${statusHTML}
 
         </div>
 
@@ -297,9 +532,16 @@ function createMatchCard(match, index) {
                 ${escapeHtml(title)}
             </h2>
 
+
             <p class="match-tournament">
                 ${escapeHtml(tournament)}
             </p>
+
+
+            ${timeHTML}
+
+
+            ${synopsisHTML}
 
 
             <div class="match-bottom">
@@ -308,11 +550,12 @@ function createMatchCard(match, index) {
                     #${escapeHtml(String(matchId))}
                 </span>
 
+
                 <button
                     class="watch-btn"
                     type="button"
                 >
-                    Watch Now
+                    ${isLive ? "Watch Now" : "View Match"}
                 </button>
 
             </div>
@@ -321,32 +564,43 @@ function createMatchCard(match, index) {
     `;
 
 
+    // --------------------------------------------------
+    // WATCH BUTTON
+    // --------------------------------------------------
+
     const watchButton =
-        card.querySelector(".watch-btn");
+        card.querySelector(
+            ".watch-btn"
+        );
 
 
-    watchButton.addEventListener(
-        "click",
-        () => {
+    if (watchButton) {
 
-            openMatch(
-                match,
-                index
-            );
+        watchButton.addEventListener(
+            "click",
+            () => {
 
-        }
-    );
+                openMatch(
+                    match,
+                    index
+                );
+            }
+        );
+    }
 
 
     return card;
 }
 
 
-// ========================================
+// ======================================================
 // OPEN MATCH
-// ========================================
+// ======================================================
 
-function openMatch(match, index) {
+function openMatch(
+    match,
+    index
+) {
 
     console.log(
         "SELECTED MATCH:",
@@ -354,7 +608,6 @@ function openMatch(match, index) {
     );
 
 
-    // Show complete object for debugging
     console.log(
         "MATCH JSON:",
         JSON.stringify(
@@ -365,27 +618,32 @@ function openMatch(match, index) {
     );
 
 
-    const streamUrl =
-        findStreamUrl(match);
+    // --------------------------------------------------
+    // OFFICIAL MATCH URL
+    // --------------------------------------------------
+
+    const matchUrl =
+        match?.match_url;
 
 
-    if (streamUrl) {
+    if (
+        typeof matchUrl === "string" &&
+        matchUrl.trim() !== ""
+    ) {
 
         window.open(
-            streamUrl,
-            "_blank"
+            matchUrl.trim(),
+            "_blank",
+            "noopener,noreferrer"
         );
 
         return;
     }
 
 
-    /*
-     * No direct stream URL found.
-     *
-     * For now show the match data instead
-     * of assuming an incorrect player URL.
-     */
+    // --------------------------------------------------
+    // FALLBACK
+    // --------------------------------------------------
 
     const matchId =
         getValue(
@@ -401,69 +659,14 @@ function openMatch(match, index) {
 
     alert(
         `Match ID: ${matchId}\n\n` +
-        "Direct stream URL is not available in this API object."
+        "Official match URL is not available."
     );
 }
 
 
-// ========================================
-// FIND STREAM URL
-// ========================================
-
-function findStreamUrl(match) {
-
-    const streams =
-        match?.streams || {};
-
-
-    const possibleUrls = [
-
-        match?.stream_url,
-
-        match?.streamUrl,
-
-        match?.stream,
-
-        match?.url,
-
-        streams?.primary,
-
-        streams?.stream_url,
-
-        streams?.stream,
-
-        streams?.url,
-
-        streams?.fancode_cdn,
-
-        streams?.fancode_lk_cdn,
-
-        streams?.fancode_np_cdn,
-
-        streams?.fancode_bd_cdn
-
-    ];
-
-
-    for (const url of possibleUrls) {
-
-        if (
-            typeof url === "string" &&
-            url.trim().length > 0
-        ) {
-
-            return url.trim();
-        }
-    }
-
-
-    return null;
-}
-
-
-// ========================================
+// ======================================================
 // GET VALUE
-// ========================================
+// ======================================================
 
 function getValue(
     object,
@@ -476,7 +679,9 @@ function getValue(
     }
 
 
-    for (const key of keys) {
+    for (
+        const key of keys
+    ) {
 
         const value =
             object[key];
@@ -497,13 +702,18 @@ function getValue(
 }
 
 
-// ========================================
-// ERROR
-// ========================================
+// ======================================================
+// SHOW ERROR
+// ======================================================
 
 function showError(error) {
 
-    let message =
+    if (!errorBox) {
+        return;
+    }
+
+
+    const message =
         error?.message ||
         "Unknown error";
 
@@ -514,9 +724,11 @@ function showError(error) {
             Matches load nahi ho paaye
         </div>
 
+
         <div class="error-message">
             ${escapeHtml(message)}
         </div>
+
 
         <div class="error-help">
             API response ko Console me check karo.
@@ -530,18 +742,38 @@ function showError(error) {
 }
 
 
-// ========================================
+// ======================================================
 // HTML ESCAPE
-// ========================================
+// ======================================================
 
 function escapeHtml(value) {
 
     return String(value)
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+
+        .replace(
+            /</g,
+            "&lt;"
+        )
+
+        .replace(
+            />/g,
+            "&gt;"
+        )
+
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+
+        .replace(
+            /'/g,
+            "&#039;"
+        );
 }
 
 
@@ -551,9 +783,9 @@ function escapeAttr(value) {
 }
 
 
-// ========================================
+// ======================================================
 // REFRESH BUTTON
-// ========================================
+// ======================================================
 
 if (refreshBtn) {
 
@@ -564,17 +796,17 @@ if (refreshBtn) {
 }
 
 
-// ========================================
+// ======================================================
 // INITIAL LOAD
-// ========================================
+// ======================================================
 
 loadMatches();
 
 
-// ========================================
+// ======================================================
 // AUTO REFRESH
 // Every 30 seconds
-// ========================================
+// ======================================================
 
 setInterval(
     loadMatches,
