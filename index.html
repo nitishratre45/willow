@@ -4,16 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-  <title>CricZone - Live Matches</title>
+  <title>CricZone - Live Cricket</title>
 
   <link rel="stylesheet" href="style.css">
+
+  <!-- Shaka Player -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/shaka-player/4.16.2/shaka-player.compiled.js"></script>
 </head>
 
 <body>
 
   <header class="header">
     <div class="logo">
-      CRIC<span>ZONE</span>
+      <span class="logo-icon">C</span>
+      <span>CRIC<span>ZONE</span></span>
     </div>
 
     <button id="refreshBtn" class="refresh-btn">
@@ -21,29 +25,60 @@
     </button>
   </header>
 
+
   <main class="container">
 
-    <div class="heading">
+    <div class="page-heading">
       <div>
-        <h1>Live Matches</h1>
-        <p id="status">Loading matches...</p>
+        <h1>Live Cricket</h1>
+        <p>Watch available matches</p>
+      </div>
+
+      <div class="stats">
+        <span id="liveCount">LIVE 0</span>
+        <span id="upcomingCount">UPCOMING 0</span>
       </div>
     </div>
+
 
     <div id="loader" class="loader">
       <div class="spinner"></div>
       <p>Loading matches...</p>
     </div>
 
+
     <div id="errorBox" class="error-box" style="display:none;"></div>
 
-    <section id="matchesGrid" class="matches-grid"></section>
 
-    <div id="emptyBox" class="empty-box" style="display:none;">
-      No matches available.
-    </div>
+    <div id="matchesGrid" class="matches-grid"></div>
 
   </main>
+
+
+  <!-- PLAYER MODAL -->
+
+  <div id="playerModal" class="player-modal">
+
+    <div class="player-container">
+
+      <button id="closePlayer" class="close-player">
+        ✕
+      </button>
+
+      <video
+        id="video"
+        class="video-player"
+        controls
+        autoplay
+        playsinline>
+      </video>
+
+      <div id="playerMessage" class="player-message"></div>
+
+    </div>
+
+  </div>
+
 
   <script src="app.js"></script>
 
