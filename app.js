@@ -79,8 +79,7 @@ async function loadMatches() {
         // FIND MATCH ARRAY
         // --------------------------------
 
-        const matches =
-            getMatchesArray(data);
+       const matches = data.Matches || [];
 
 
         if (!matches.length) {
